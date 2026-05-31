@@ -82,10 +82,15 @@ export function useFocusTrap(isActive) {
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      // Return focus to trigger element when modal closes
-      if (previousFocusRef.current && previousFocusRef.current.focus) {
+      // Return focus only when the trigger still exists in the document.
+      if (
+        previousFocusRef.current &&
+        previousFocusRef.current.isConnected &&
+        previousFocusRef.current.focus
+      ) {
         previousFocusRef.current.focus();
       }
+      previousFocusRef.current = null;
     };
   }, [isActive]);
 
