@@ -5,11 +5,11 @@ const useLocalStorage = (key, initialValue) => {
   const initialValueRef = useRef(initialValue);
   initialValueRef.current = initialValue;
 
-  // 🔥 FIX: Track when WE fired the event so we don't react to ourselves
   const isInternalWrite = useRef(false);
 
   const readValue = useCallback(() => {
     if (typeof window === "undefined") return initialValueRef.current;
+
     try {
       const item = window.localStorage.getItem(key);
       return safeJsonParse(item, initialValueRef.current);
@@ -21,41 +21,53 @@ const useLocalStorage = (key, initialValue) => {
 
   const [storedValue, setStoredValue] = useState(readValue);
 
-  const setValue = useCallback(
-    (value) => {
-      try {
-        setStoredValue((currentVal) => {
-          const newValue = value instanceof Function ? value(currentVal) : value;
-          window.localStorage.setItem(key, JSON.stringify(newValue));
-
-          // 🔥 FIX: Mark as internal before dispatching so listener skips it
-          isInternalWrite.current = true;
-          window.dispatchEvent(new CustomEvent("local-storage", { detail: { key } }));
-          return newValue;
-        });
-      } catch (error) {
-        console.warn(`useLocalStorage: error setting key "${key}":`, error);
-      }
-    },
-    [key]
-  );
-
-  const removeValue = useCallback(() => {
+  const notifyLocalStorageListeners = useCallback(() => {
     try {
-      window.localStorage.removeItem(key);
-      setStoredValue(initialValueRef.current);
-
-      // 🔥 FIX: Mark as internal before dispatching
       isInternalWrite.current = true;
       window.dispatchEvent(new CustomEvent("local-storage", { detail: { key } }));
-    } catch (error) {
-      console.warn(`useLocalStorage: error removing key "${key}":`, error);
+    } catch {
+      isInternalWrite.current = false;
     }
   }, [key]);
 
+  const setValue = useCallback(
+    (value) => {
+      setStoredValue((currentVal) => {
+        const newValue = value instanceof Function ? value(currentVal) : value;
+
+        try {
+          if (typeof window !== "undefined" && window.localStorage) {
+            window.localStorage.setItem(key, JSON.stringify(newValue));
+          }
+        } catch (error) {
+          console.warn(`useLocalStorage: error setting key "${key}":`, error);
+        }
+
+        notifyLocalStorageListeners();
+        return newValue;
+      });
+    },
+    [key, notifyLocalStorageListeners]
+  );
+
+  const removeValue = useCallback(() => {
+    setStoredValue(initialValueRef.current);
+
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.warn(`useLocalStorage: error removing key "${key}":`, error);
+    }
+
+    notifyLocalStorageListeners();
+  }, [key, notifyLocalStorageListeners]);
+
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const handleStorageChange = (event) => {
-      // 🔥 FIX: Skip events WE fired — they are already handled by setStoredValue
       if (isInternalWrite.current) {
         isInternalWrite.current = false;
         return;
@@ -79,13 +91,16 @@ const useLocalStorage = (key, initialValue) => {
 };
 
 export default useLocalStorage;
+
 export const isLocalStorageAvailable = () => {
   try {
+    if (typeof window === "undefined" || !window.localStorage) return false;
+
     const testKey = "__storage_test__";
     window.localStorage.setItem(testKey, testKey);
     window.localStorage.removeItem(testKey);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 };
