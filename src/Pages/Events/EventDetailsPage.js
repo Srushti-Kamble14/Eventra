@@ -24,6 +24,7 @@ const EventDetailsPage = () => {
   const [, setError] = useState(null);
   const [cacheInfo, setCacheInfo] = useState(null);
   const [copied, setCopied] = useState(false);
+  const copyResetTimerRef = useRef(null);
 
   const shareUrl = event ? `${window.location.origin}/events/${event.id}` : "";
   const shareText = event ? `Check out this event: ${event.title}` : "";
@@ -41,7 +42,13 @@ const EventDetailsPage = () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = setTimeout(() => {
+        setCopied(false);
+        copyResetTimerRef.current = null;
+      }, 2000);
     } catch {
       toast.error("Failed to copy link to clipboard");
     }
@@ -136,6 +143,14 @@ const EventDetailsPage = () => {
       controller.abort();
     };
   }, [eventId]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
 
 
 
