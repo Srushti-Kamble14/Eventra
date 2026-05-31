@@ -121,7 +121,15 @@ export const setOnUnauthorizedHandler = (handler) => {
  * body fields.
  */
 const normalizeRequestConfig = (configOrToken = {}) => {
-  const config = typeof configOrToken === "string" ? {} : { ...configOrToken };
+  // Keep legacy token-string callers authenticated instead of dropping the token.
+  const config =
+    typeof configOrToken === "string"
+      ? {
+          headers: {
+            Authorization: `Bearer ${configOrToken}`,
+          },
+        }
+      : { ...configOrToken };
 
   if ("skipAuth" in config) {
     delete config.skipAuth;
