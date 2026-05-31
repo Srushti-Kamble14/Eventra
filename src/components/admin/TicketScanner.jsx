@@ -32,6 +32,7 @@ export default function TicketScanner() {
   const [manualEventName, setManualEventName] = useState("Global AI Hackathon");
 
   const qrCodeInstanceRef = useRef(null);
+  const isMountedRef = useRef(true);
   const readerId = "html5-qr-reader";
 
   // Load cameras
@@ -58,6 +59,7 @@ export default function TicketScanner() {
       });
 
     return () => {
+      isMountedRef.current = false;
       // Cleanup scanner on unmount
       stopScanner();
     };
@@ -65,13 +67,26 @@ export default function TicketScanner() {
 
   // Stop the active scanner
   const stopScanner = async () => {
-    if (qrCodeInstanceRef.current && qrCodeInstanceRef.current.isScanning) {
+    const scanner = qrCodeInstanceRef.current;
+    if (!scanner) return;
+
+    if (scanner.isScanning) {
       try {
-        await qrCodeInstanceRef.current.stop();
-        setScannerStatus("stopped");
+        await scanner.stop();
+        if (isMountedRef.current) {
+          setScannerStatus("stopped");
+        }
       } catch (err) {
         console.error("Failed to stop scanner:", err);
       }
+    }
+
+    try {
+      scanner.clear();
+    } catch (err) {
+      console.error("Failed to clear scanner instance:", err);
+    } finally {
+      qrCodeInstanceRef.current = null;
     }
   };
 
